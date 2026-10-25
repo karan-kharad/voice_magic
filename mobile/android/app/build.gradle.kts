@@ -1,6 +1,6 @@
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -46,9 +46,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        debug {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
