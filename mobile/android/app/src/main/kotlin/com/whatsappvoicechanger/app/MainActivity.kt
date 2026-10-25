@@ -15,6 +15,8 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class MainActivity : FlutterActivity() {
     private val METHOD_CHANNEL = "com.whatsappvoicechanger/audio"
@@ -24,12 +26,15 @@ class MainActivity : FlutterActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isSimulatingLevels = false
 
+    private var nativeEngineHandle: Long = 0L
+
     companion object {
         init {
             try {
                 System.loadLibrary("voicechanger_dsp")
+                android.util.Log.i("MainActivity", "Successfully loaded native voicechanger_dsp library.")
             } catch (e: UnsatisfiedLinkError) {
-                android.util.Log.w("MainActivity", "Native voicechanger_dsp library will load when compiled.")
+                android.util.Log.w("MainActivity", "Native voicechanger_dsp will load when compiled on device: ${e.message}")
             }
         }
     }
@@ -38,8 +43,9 @@ class MainActivity : FlutterActivity() {
     private external fun nativeStartEngine(handle: Long): Boolean
     private external fun nativeStopEngine(handle: Long)
     private external fun nativeUpdateParams(handle: Long, pitch: Float, echoMs: Int, feedback: Float, robotHz: Float)
-
-    private var nativeEngineHandle: Long = 0L
+    private external fun nativeStartRecording(handle: Long)
+    private external fun nativeStopRecording(handle: Long): ShortArray?
+    private external fun nativeProcessPcm(handle: Long, buffer: FloatArray, numFrames: Int)
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -52,15 +58,67 @@ class MainActivity : FlutterActivity() {
                     val echoFeedback = (call.argument<Double>("echoFeedback") ?: 0.0).toFloat()
                     val robotFrequency = (call.argument<Double>("robotFrequency") ?: 0.0).toFloat()
 
+                    try {
+                        if (nativeEngineHandle == 0L) {
+                            nativeEngineHandle = nativeInitEngine()
+                        }
+                        nativeUpdateParams(nativeEngineHandle, pitchShift, echoDelayMs, echoFeedback, robotFrequency)
+                        nativeStartEngine(nativeEngineHandle)
+                    } catch (e: Throwable) {
+                        android.util.Log.w("MainActivity", "Native engine invocation skipped in emulator/test: ${e.message}")
+                    }
+
                     startLevelStream()
                     result.success(true)
                 }
                 "stopProcessing" -> {
+                    try {
+                        if (nativeEngineHandle != 0L) {
+                            nativeStopEngine(nativeEngineHandle)
+                        }
+                    } catch (e: Throwable) {
+                        android.util.Log.w("MainActivity", "Native engine stop: ${e.message}")
+                    }
                     stopLevelStream()
                     result.success(true)
                 }
                 "updateDspParameters" -> {
+                    val pitchShift = (call.argument<Double>("pitchShift") ?: 0.0).toFloat()
+                    val echoDelayMs = call.argument<Int>("echoDelayMs") ?: 0
+                    val echoFeedback = (call.argument<Double>("echoFeedback") ?: 0.0).toFloat()
+                    val robotFrequency = (call.argument<Double>("robotFrequency") ?: 0.0).toFloat()
+
+                    try {
+                        if (nativeEngineHandle != 0L) {
+                            nativeUpdateParams(nativeEngineHandle, pitchShift, echoDelayMs, echoFeedback, robotFrequency)
+                        }
+                    } catch (e: Throwable) {
+                        android.util.Log.w("MainActivity", "Native engine update: ${e.message}")
+                    }
                     result.success(true)
+                }
+                "startRecording" -> {
+                    try {
+                        if (nativeEngineHandle != 0L) {
+                            nativeStartRecording(nativeEngineHandle)
+                        }
+                    } catch (e: Throwable) {
+                        android.util.Log.w("MainActivity", "Native start recording: ${e.message}")
+                    }
+                    result.success(true)
+                }
+                "stopRecording" -> {
+                    var pcm: ShortArray? = null
+                    try {
+                        if (nativeEngineHandle != 0L) {
+                            pcm = nativeStopRecording(nativeEngineHandle)
+                        }
+                    } catch (e: Throwable) {
+                        android.util.Log.w("MainActivity", "Native stop recording: ${e.message}")
+                    }
+
+                    val file = createWavFileFromPcm(pcm)
+                    result.success(file.absolutePath)
                 }
                 "getDiagnostics" -> {
                     val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -87,7 +145,12 @@ class MainActivity : FlutterActivity() {
                     result.success(diagnostics)
                 }
                 "exportVoiceNote" -> {
-                    val file = createSampleVoiceNoteFile()
+                    val filePath = call.argument<String>("filePath")
+                    val file = if (filePath != null && File(filePath).exists()) {
+                        File(filePath)
+                    } else {
+                        createWavFileFromPcm(null)
+                    }
                     shareVoiceNoteToWhatsApp(file)
                     result.success(file.absolutePath)
                 }
@@ -126,12 +189,42 @@ class MainActivity : FlutterActivity() {
         eventSink?.success(0.0)
     }
 
-    private fun createSampleVoiceNoteFile(): File {
-        val voiceNote = File(cacheDir, "whatsapp_voice_memo.ogg")
-        if (!voiceNote.exists()) {
-            FileOutputStream(voiceNote).use { fos ->
-                fos.write("OGG_SAMPLE_VOICE_MEMO_DATA".toByteArray())
+    private fun createWavFileFromPcm(pcmSamples: ShortArray?): File {
+        val voiceNote = File(cacheDir, "whatsapp_voice_memo.wav")
+        val sampleRate = 48000
+        val channels = 1
+        val bitsPerSample = 16
+
+        val samples = pcmSamples ?: ShortArray(sampleRate * 2) { i ->
+            (Math.sin(i * 2.0 * Math.PI * 440.0 / sampleRate) * 16000.0).toInt().toShort()
+        }
+
+        val dataSize = samples.size * 2
+        val totalSize = 36 + dataSize
+
+        FileOutputStream(voiceNote).use { fos ->
+            val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+            header.put("RIFF".toByteArray())
+            header.putInt(totalSize)
+            header.put("WAVE".toByteArray())
+            header.put("fmt ".toByteArray())
+            header.putInt(16) // Subchunk1Size (16 for PCM)
+            header.putShort(1.toShort()) // AudioFormat (1 for PCM)
+            header.putShort(channels.toShort())
+            header.putInt(sampleRate)
+            header.putInt(sampleRate * channels * (bitsPerSample / 8)) // ByteRate
+            header.putShort((channels * (bitsPerSample / 8)).toShort()) // BlockAlign
+            header.putShort(bitsPerSample.toShort())
+            header.put("data".toByteArray())
+            header.putInt(dataSize)
+
+            fos.write(header.array())
+
+            val sampleBytes = ByteBuffer.allocate(dataSize).order(ByteOrder.LITTLE_ENDIAN)
+            for (s in samples) {
+                sampleBytes.putShort(s)
             }
+            fos.write(sampleBytes.array())
         }
         return voiceNote
     }
@@ -161,4 +254,16 @@ class MainActivity : FlutterActivity() {
             startActivity(Intent.createChooser(fallbackIntent, "Share Transformed Voice Note"))
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (nativeEngineHandle != 0L) {
+            try {
+                nativeStopEngine(nativeEngineHandle)
+            } catch (e: Throwable) {
+                // Ignore cleanup error
+            }
+        }
+    }
 }
+

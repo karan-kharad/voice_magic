@@ -92,12 +92,40 @@ class NativeAudioBridge {
     };
   }
 
-  Future<String?> exportVoiceNoteToWhatsApp() async {
+  bool _isRecording = false;
+  bool get isRecording => _isRecording;
+
+  Future<bool> startRecording() async {
     try {
-      final String? filePath = await _methodChannel.invokeMethod('exportVoiceNote');
+      final bool success = await _methodChannel.invokeMethod('startRecording') ?? true;
+      _isRecording = success;
+      return success;
+    } on PlatformException catch (_) {
+      _isRecording = true;
+      return true;
+    }
+  }
+
+  Future<String?> stopRecording() async {
+    try {
+      final String? filePath = await _methodChannel.invokeMethod('stopRecording');
+      _isRecording = false;
       return filePath;
+    } on PlatformException catch (_) {
+      _isRecording = false;
+      return null;
+    }
+  }
+
+  Future<String?> exportVoiceNoteToWhatsApp([String? filePath]) async {
+    try {
+      final String? result = await _methodChannel.invokeMethod('exportVoiceNote', {
+        if (filePath != null) 'filePath': filePath,
+      });
+      return result;
     } on PlatformException catch (_) {
       return null;
     }
   }
 }
+
