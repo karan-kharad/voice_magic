@@ -1,0 +1,88 @@
+name: Django CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/django-ci.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+
+jobs:
+  django-tests:
+    name: Django Lint & PostgreSQL Unit Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: whatsapp_voice_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: 'backend/requirements/base.txt'
+
+      - name: Install Dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements/base.txt
+          pip install flake8 black pytest pytest-django coverage
+
+      - name: Code Formatting Check (Black)
+        working-directory: backend
+        run: black --check .
+
+      - name: Linting (Flake8)
+        working-directory: backend
+        run: flake8 . --max-line-length=120 --exclude=venv,migrations
+
+      - name: Validate Django Configuration & Deploy Check
+        working-directory: backend
+        run: python manage.py check
+        env:
+          DJANGO_SECRET_KEY: 'test-secret-key-for-ci-checks-only'
+          POSTGRES_DB: whatsapp_voice_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+
+      - name: Run Pytest Test Suite
+        working-directory: backend
+        run: pytest --cov=apps --cov-report=xml
+        env:
+          DJANGO_SECRET_KEY: 'test-secret-key-for-ci-checks-only'
+          POSTGRES_DB: whatsapp_voice_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: 5432
+
+      - name: Upload Test Coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: django-coverage-report
+          path: backend/coverage.xml
+          retention-days: 7

@@ -1,0 +1,30 @@
+[Unit]
+Description=Gunicorn daemon for WhatsApp Voice Changer Django Backend
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/whatsapp-voice/backend
+EnvironmentFile=/etc/whatsapp-voice/environment
+ExecStart=/var/www/whatsapp-voice/backend/venv/bin/gunicorn \
+          --workers 3 \
+          --threads 2 \
+          --bind unix:/run/gunicorn.sock \
+          --timeout 30 \
+          --keep-alive 5 \
+          --access-logfile /var/log/whatsapp-voice/gunicorn_access.log \
+          --error-logfile /var/log/whatsapp-voice/gunicorn_error.log \
+          --capture-output \
+          core.wsgi:application
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=10
+PrivateTmp=true
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
