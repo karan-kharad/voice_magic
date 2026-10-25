@@ -154,6 +154,20 @@ class MainActivity : FlutterActivity() {
                     shareVoiceNoteToWhatsApp(file)
                     result.success(file.absolutePath)
                 }
+                "setVoipMode" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: false
+                    val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    try {
+                        if (enabled) {
+                            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                        } else {
+                            audioManager.mode = AudioManager.MODE_NORMAL
+                        }
+                    } catch (e: Throwable) {
+                        android.util.Log.w("MainActivity", "Audio mode error: ${e.message}")
+                    }
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }

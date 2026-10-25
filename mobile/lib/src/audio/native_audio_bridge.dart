@@ -127,5 +127,14 @@ class NativeAudioBridge {
       return null;
     }
   }
+
+  Future<bool> setVoipMode(bool enabled) async {
+    try {
+      return await _methodChannel.invokeMethod('setVoipMode', {'enabled': enabled}) ?? true;
+    } on PlatformException catch (_) {
+      return true;
+    }
+  }
 }
+
 

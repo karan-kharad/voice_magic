@@ -45,4 +45,5 @@ urlpatterns = [
     path('api/v1/subscriptions/', include('apps.subscriptions.urls')),
     path('api/v1/compatibility/', include('apps.diagnostics.urls')),
     path('api/v1/support/', include('apps.support.urls')),
+    path('api/v1/calling/', include('apps.calling.urls')),
 ]

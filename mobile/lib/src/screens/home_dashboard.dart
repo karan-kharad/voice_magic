@@ -8,6 +8,7 @@ import 'diagnostics_screen.dart';
 import 'subscription_screen.dart';
 import 'settings_screen.dart';
 import 'compatibility_warning_screen.dart';
+import 'voip_lobby_screen.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({super.key});
@@ -184,7 +185,65 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
+
+            // In-App VoIP Live Calling Hero Card (Track B)
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const VoipLobbyScreen()),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF142B20), Color(0xFF0F1B15)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF25D366).withOpacity(0.35)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366).withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.phone_in_talk_rounded, color: Color(0xFF25D366), size: 24),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'In-App VoIP Live Call',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(Icons.bolt_rounded, color: Color(0xFF25D366), size: 16),
+                            ],
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Real-time P2P call with live voice modifier',
+                            style: TextStyle(fontSize: 12, color: Colors.white60),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFF25D366), size: 16),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 22),
 
             // Quick Actions Navigation Grid
             Row(

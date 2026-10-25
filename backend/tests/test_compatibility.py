@@ -1,12 +1,10 @@
-import pytest
-from rest_framework.test import APIClient
+from rest_framework.test import APITestCase
 
 
-@pytest.mark.django_db
-def test_compatibility_check():
-    client = APIClient()
-    response = client.get('/api/v1/compatibility/check/?android_sdk=35&device_model=Pixel9Pro')
-    assert response.status_code == 200
-    assert response.data['success'] is True
-    assert response.data['data']['capabilities']['whatsapp_live_call_injection'] is False
-    assert response.data['data']['capabilities']['whatsapp_voice_note_share'] is True
+class CompatibilityTestCase(APITestCase):
+    def test_compatibility_check(self):
+        response = self.client.get('/api/v1/compatibility/check/?android_sdk=35&device_model=Pixel9Pro')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['success'])
+        self.assertFalse(response.data['data']['capabilities']['whatsapp_live_call_injection'])
+        self.assertTrue(response.data['data']['capabilities']['whatsapp_voice_note_share'])

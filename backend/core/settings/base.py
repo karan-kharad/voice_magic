@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'apps.subscriptions',
     'apps.diagnostics',
     'apps.support',
+    'apps.calling',
 ]
 
 MIDDLEWARE = [
