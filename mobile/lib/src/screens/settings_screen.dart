@@ -1,8 +1,79 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _currentServerUrl = 'Loading...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentServer();
+  }
+
+  Future<void> _loadCurrentServer() async {
+    final url = await ApiService.instance.getBaseUrl();
+    if (mounted) setState(() => _currentServerUrl = url);
+  }
+
+  void _showServerConfigDialog() {
+    final controller = TextEditingController(text: _currentServerUrl);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF191D26),
+        title: const Text('Configure EC2 Server URL', style: TextStyle(color: Colors.white, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your AWS EC2 Public IP or Domain:',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'e.g. 13.233.xx.xx or http://ip',
+                hintStyle: TextStyle(color: Colors.grey.shade600),
+                filled: true,
+                fillColor: Colors.black26,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('CANCEL', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () async {
+              if (controller.text.isNotEmpty) {
+                await ApiService.instance.setCustomBaseUrl(controller.text);
+                await _loadCurrentServer();
+              }
+              if (mounted) Navigator.pop(ctx);
+            },
+            child: const Text('SAVE'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,6 +86,18 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(18),
         children: [
+          const Text('Backend & Server Connection',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+          const SizedBox(height: 10),
+          _buildActionTile(
+            context,
+            'EC2 Server Connection',
+            _currentServerUrl,
+            Icons.cloud_sync_rounded,
+            onTap: _showServerConfigDialog,
+          ),
+
+          const SizedBox(height: 24),
           const Text('Audio Preferences',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
           const SizedBox(height: 10),
@@ -34,7 +117,17 @@ class SettingsScreen extends StatelessWidget {
           const Text('Support & Feedback',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
           const SizedBox(height: 10),
-          _buildActionTile(context, 'Submit Diagnostics Report', 'Sends device hardware specs to improve compatibility', Icons.bug_report_rounded),
+          _buildActionTile(
+            context,
+            'Submit Diagnostics Report',
+            'Sends device hardware specs to improve compatibility',
+            Icons.bug_report_rounded,
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Diagnostics report submitted to backend.')),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -72,7 +165,7 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionTile(BuildContext context, String title, String subtitle, IconData icon) {
+  Widget _buildActionTile(BuildContext context, String title, String subtitle, IconData icon, {VoidCallback? onTap}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -84,11 +177,7 @@ class SettingsScreen extends StatelessWidget {
         title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
         subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
         trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-        onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Diagnostics report submitted to backend.')),
-          );
-        },
+        onTap: onTap,
       ),
     );
   }

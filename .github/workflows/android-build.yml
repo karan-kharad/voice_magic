@@ -52,7 +52,7 @@ jobs:
 
       - name: Build Android Debug APK
         working-directory: mobile
-        run: flutter build apk --debug
+        run: flutter build apk --debug --dart-define=API_URL="${{ vars.EC2_API_URL || 'http://172.31.43.241/api/v1' }}"
 
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v4
@@ -103,7 +103,7 @@ jobs:
 
       - name: Build Signed Android App Bundle (AAB)
         working-directory: mobile
-        run: flutter build appbundle --release
+        run: flutter build appbundle --release --dart-define=API_URL="${{ vars.EC2_API_URL || 'http://172.31.43.241/api/v1' }}"
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
