@@ -6,8 +6,11 @@ import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -29,6 +32,9 @@ class MainActivity : FlutterActivity() {
     private var nativeEngineHandle: Long = 0L
 
     companion object {
+        @Volatile
+        var currentInstance: MainActivity? = null
+
         init {
             try {
                 System.loadLibrary("voicechanger_dsp")
@@ -46,6 +52,11 @@ class MainActivity : FlutterActivity() {
     private external fun nativeStartRecording(handle: Long)
     private external fun nativeStopRecording(handle: Long): ShortArray?
     private external fun nativeProcessPcm(handle: Long, buffer: FloatArray, numFrames: Int)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        currentInstance = this
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -168,6 +179,55 @@ class MainActivity : FlutterActivity() {
                     }
                     result.success(true)
                 }
+                // ── Floating Overlay & WhatsApp Call Detection Handlers ──
+                "isOverlayPermissionGranted" -> {
+                    val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Settings.canDrawOverlays(this)
+                    } else {
+                        true
+                    }
+                    result.success(granted)
+                }
+                "requestOverlayPermission" -> {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")
+                        ).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                    }
+                    result.success(true)
+                }
+                "isNotificationListenerGranted" -> {
+                    val listeners = NotificationManagerCompat.getEnabledListenerPackages(this)
+                    val granted = listeners.contains(packageName)
+                    result.success(granted)
+                }
+                "requestNotificationListenerPermission" -> {
+                    val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                    result.success(true)
+                }
+                "isAutoPopupEnabled" -> {
+                    result.success(OverlayPreferences.isAutoPopupEnabled(this))
+                }
+                "setAutoPopupEnabled" -> {
+                    val enabled = call.argument<Boolean>("enabled") ?: true
+                    OverlayPreferences.setAutoPopupEnabled(this, enabled)
+                    result.success(true)
+                }
+                "showFloatingOverlay" -> {
+                    FloatingCallOverlayService.show(this)
+                    result.success(true)
+                }
+                "hideFloatingOverlay" -> {
+                    FloatingCallOverlayService.hide(this)
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -183,6 +243,42 @@ class MainActivity : FlutterActivity() {
                 }
             }
         )
+    }
+
+    fun startDspFromOverlay(pitch: Float, echoMs: Int, feedback: Float, robotHz: Float) {
+        try {
+            if (nativeEngineHandle == 0L) {
+                nativeEngineHandle = nativeInitEngine()
+            }
+            nativeUpdateParams(nativeEngineHandle, pitch, echoMs, feedback, robotHz)
+            nativeStartEngine(nativeEngineHandle)
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "startDspFromOverlay error: ${e.message}")
+        }
+        startLevelStream()
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+            MethodChannel(messenger, METHOD_CHANNEL).invokeMethod(
+                "onOverlayStateChanged",
+                mapOf("active" to true, "pitch" to pitch)
+            )
+        }
+    }
+
+    fun stopDspFromOverlay() {
+        try {
+            if (nativeEngineHandle != 0L) {
+                nativeStopEngine(nativeEngineHandle)
+            }
+        } catch (e: Throwable) {
+            android.util.Log.w("MainActivity", "stopDspFromOverlay error: ${e.message}")
+        }
+        stopLevelStream()
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+            MethodChannel(messenger, METHOD_CHANNEL).invokeMethod(
+                "onOverlayStateChanged",
+                mapOf("active" to false)
+            )
+        }
     }
 
     private fun startLevelStream() {
@@ -270,6 +366,9 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        if (currentInstance == this) {
+            currentInstance = null
+        }
         super.onDestroy()
         if (nativeEngineHandle != 0L) {
             try {
@@ -280,4 +379,3 @@ class MainActivity : FlutterActivity() {
         }
     }
 }
-

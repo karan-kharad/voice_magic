@@ -135,6 +135,62 @@ class NativeAudioBridge {
       return true;
     }
   }
+
+  // ── Floating Overlay & WhatsApp Call Detection ──
+
+  Future<bool> isOverlayPermissionGranted() async {
+    try {
+      return await _methodChannel.invokeMethod('isOverlayPermissionGranted') ?? false;
+    } on PlatformException catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> requestOverlayPermission() async {
+    try {
+      await _methodChannel.invokeMethod('requestOverlayPermission');
+    } on PlatformException catch (_) {}
+  }
+
+  Future<bool> isNotificationListenerGranted() async {
+    try {
+      return await _methodChannel.invokeMethod('isNotificationListenerGranted') ?? false;
+    } on PlatformException catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> requestNotificationListenerPermission() async {
+    try {
+      await _methodChannel.invokeMethod('requestNotificationListenerPermission');
+    } on PlatformException catch (_) {}
+  }
+
+  Future<bool> isAutoPopupEnabled() async {
+    try {
+      return await _methodChannel.invokeMethod('isAutoPopupEnabled') ?? true;
+    } on PlatformException catch (_) {
+      return true;
+    }
+  }
+
+  Future<void> setAutoPopupEnabled(bool enabled) async {
+    try {
+      await _methodChannel.invokeMethod('setAutoPopupEnabled', {'enabled': enabled});
+    } on PlatformException catch (_) {}
+  }
+
+  Future<void> showFloatingOverlay() async {
+    try {
+      await _methodChannel.invokeMethod('showFloatingOverlay');
+    } on PlatformException catch (_) {}
+  }
+
+  Future<void> hideFloatingOverlay() async {
+    try {
+      await _methodChannel.invokeMethod('hideFloatingOverlay');
+    } on PlatformException catch (_) {}
+  }
 }
 
 

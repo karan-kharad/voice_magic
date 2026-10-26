@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
+import '../audio/native_audio_bridge.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -10,11 +11,18 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   String _currentServerUrl = 'Loading...';
+  bool _autoPopupEnabled = true;
 
   @override
   void initState() {
     super.initState();
     _loadCurrentServer();
+    _loadOverlayPref();
+  }
+
+  Future<void> _loadOverlayPref() async {
+    final enabled = await NativeAudioBridge.instance.isAutoPopupEnabled();
+    if (mounted) setState(() => _autoPopupEnabled = enabled);
   }
 
   Future<void> _loadCurrentServer() async {
@@ -95,6 +103,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _currentServerUrl,
             Icons.cloud_sync_rounded,
             onTap: _showServerConfigDialog,
+          ),
+
+          const SizedBox(height: 24),
+          const Text('WhatsApp Call Detection & Floating Overlay',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+          const SizedBox(height: 10),
+          _buildSwitchTile(
+            'Auto-Show Popup on WhatsApp Call',
+            'Display floating voice changer controls when incoming/outgoing WhatsApp call starts',
+            _autoPopupEnabled,
+            (v) async {
+              await NativeAudioBridge.instance.setAutoPopupEnabled(v);
+              setState(() => _autoPopupEnabled = v);
+            },
+          ),
+          _buildActionTile(
+            context,
+            'Draw Over Other Apps Permission',
+            'Required to display floating window over WhatsApp',
+            Icons.picture_in_picture_alt_rounded,
+            onTap: () async {
+              await NativeAudioBridge.instance.requestOverlayPermission();
+            },
+          ),
+          _buildActionTile(
+            context,
+            'Call Notification Access',
+            'Required to detect incoming and active WhatsApp calls',
+            Icons.notifications_active_rounded,
+            onTap: () async {
+              await NativeAudioBridge.instance.requestNotificationListenerPermission();
+            },
           ),
 
           const SizedBox(height: 24),
